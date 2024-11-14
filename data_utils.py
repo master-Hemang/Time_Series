@@ -1,37 +1,37 @@
 import torch
-import torch.nn.functional as F
-from sklearn.preprocessing import StandardScaler
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 class DataLoader:
-    def __init__(self, path):
-        # Load the data from the given path
+    def __init__(self, path, data_type='train'):
+        # Load the data from the specified path
         self.data = torch.load(path)
-
-        # Inspect the structure of the data
-        print("Loaded data structure:", type(self.data))
-        if isinstance(self.data, dict):  # If it's a dictionary, print the keys
-            print("Keys in data:", self.data.keys())
-            print("Sample of data:", self.data)
-            # Access the correct data subset (adjust the key as per your data structure)
-            self.data = self.data.get('train_data', None)  # Adjust key name as needed
-            if self.data is None:
-                print("Error: 'train_data' not found in the loaded data!")
+        
+        # Check if data is a dictionary; if so, look for the required key
+        if isinstance(self.data, dict):
+            if data_type in self.data:
+                self.data = self.data[data_type]
+            else:
+                raise KeyError(f"'{data_type}' key not found in the data dictionary.")
+        # If not a dictionary, assume it’s directly the data we need
+        elif isinstance(self.data, torch.Tensor) or isinstance(self.data, np.ndarray):
+            print(f"Loaded data directly as a {type(self.data).__name__}.")
         else:
-            print("Data is not a dictionary, it is:", type(self.data))
-            # Handle cases where data is not a dictionary
-            self.data = self.data  # If it's a tensor or other structure, keep it as it is
+            raise ValueError("Data format not recognized. Expected a dictionary, tensor, or NumPy array.")
 
     def preprocess(self, scale=True):
+        # Ensure the data is in numpy format for processing
         if isinstance(self.data, torch.Tensor):
-            data_np = self.data.numpy()  # Convert tensor to numpy array
+            data_np = self.data.numpy()  # Convert tensor to numpy array for preprocessing
+        elif isinstance(self.data, np.ndarray):
+            data_np = self.data
         else:
-            raise ValueError("Data should be a tensor after preprocessing")
-        
+            raise ValueError("Data should be a tensor or NumPy array for preprocessing")
+
         # Handle missing values by replacing NaNs with 0
         data_np = np.nan_to_num(data_np)
 
-        # Optionally scale the data (standardization)
+        # Scale the data if the scale flag is True
         if scale:
             scaler = StandardScaler()
             shape = data_np.shape
@@ -39,15 +39,14 @@ class DataLoader:
             data_np = scaler.fit_transform(data_np)  # Fit and transform the data
             data_np = data_np.reshape(shape)  # Reshape back to original shape
 
-        return torch.tensor(data_np)  # Convert back to tensor
+        # Convert the processed data back to a tensor
+        self.data = torch.tensor(data_np)  # Update self.data with preprocessed tensor
+        return self.data
 
+    def get_data(self):
+        return self.data  # Return the processed data for use in model training
 
-# Usage example for gesture data
-gesture_train = DataLoader('Gesture/train.pt').preprocess()
-gesture_test = DataLoader('Gesture/test.pt').preprocess()
-gesture_val = DataLoader('Gesture/val.pt').preprocess()
-
-# For HAR data
-har_train = DataLoader('HAR/train.pt').preprocess()
-har_test = DataLoader('HAR/test.pt').preprocess()
-har_val = DataLoader('HAR/val.pt').preprocess()
+# Example usage:
+# loader = DataLoader('Gesture/train.pt', data_type='train')
+# preprocessed_data = loader.preprocess(scale=True)
+# print("Processed data:", preprocessed_data)
